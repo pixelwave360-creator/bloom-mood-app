@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bloom AI — Mood Predictor</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --rose:    #E8849A;
+  --mauve:   #C07AAE;
+  --blush:   #F2C4CE;
+  --lavender:#D4B8E8;
+  --peach:   #F5C9A8;
+  --sage:    #A8C8A0;
+  --gold:    #E8C878;
+  --cream:   #FDF6F0;
+  --muted:   #9A8A94;
+  --glass:   rgba(255,255,255,0.07);
+  --glass2:  rgba(255,255,255,0.12);
+}
+
+html { scroll-behavior: smooth; }
+body {
+  min-height: 100vh;
+  font-family: 'Jost', sans-serif;
+  background: #130C10;
+  color: var(--cream);
+  overflow: hidden;
+}
+
+.orb {
+  position: fixed; border-radius: 50%;
+  filter: blur(80px); opacity: 0.32; pointer-events: none;
+  animation: drift 14s ease-in-out infinite alternate;
+}
+.orb1 { width:520px;height:520px;background:radial-gradient(circle,#C07AAE,transparent);top:-160px;left:-110px; }
+.orb2 { width:420px;height:420px;background:radial-gradient(circle,#E8849A,transparent);bottom:-120px;right:-90px;animation-delay:-5s; }
+.orb3 { width:320px;height:320px;background:radial-gradient(circle,#D4B8E8,transparent);top:40%;left:48%;animation-delay:-9s; }
+@keyframes drift { 0%{transform:translate(0,0) scale(1)} 100%{transform:translate(28px,18px) scale(1.06)} }
+
+body::before {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+}
+
+/* ── PAGE SYSTEM ── */
+.page {
+  position: fixed; inset: 0;
+  overflow-y: auto;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 48px 20px 80px;
+  z-index: 1;
+  transition: opacity 0.55s ease, transform 0.55s ease;
+  will-change: transform, opacity;
+}
+.page.hidden { opacity:0; pointer-events:none; transform:translateX(60px) scale(0.97); }
+.page.exit   { opacity:0; pointer-events:none; transform:translateX(-60px) scale(0.97); }
+
+/* ── PAGE 1 ── */
+#page1 { justify-content: center; }
+
+.logo-wrap { text-align:center; margin-bottom:38px; animation:fadeUp .7s ease both; }
+.logo {
+  font-family:'Cormorant Garamond',serif;
+  font-size:62px; font-weight:300; font-style:italic; letter-spacing:4px; line-height:1; margin-bottom:6px;
+  background:linear-gradient(135deg,#F2C4CE,#E8849A,#C07AAE,#D4B8E8);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+}
+.logo-sub { font-size:11px; letter-spacing:5px; text-transform:uppercase; color:var(--muted); }
+
+.input-card {
+  width:100%; max-width:620px;
+  background:var(--glass); border:1px solid rgba(255,255,255,0.1);
+  border-radius:28px; padding:36px; backdrop-filter:blur(20px);
+  box-shadow:0 24px 64px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+  animation:fadeUp .7s .1s ease both;
+}
+.card-eyebrow {
+  font-size:10px; letter-spacing:4px; text-transform:uppercase; color:var(--mauve);
+  margin-bottom:12px; display:flex; align-items:center; gap:8px;
+}
+.card-eyebrow::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,rgba(192,122,174,.4),transparent); }
+.card-title { font-family:'Cormorant Garamond',serif; font-size:30px; font-weight:400; margin-bottom:6px; line-height:1.25; }
+.card-desc  { font-size:13px; color:var(--muted); margin-bottom:26px; line-height:1.65; }
+
+.input-wrap { position:relative; margin-bottom:18px; }
+textarea {
+  width:100%; background:rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.12); border-radius:18px;
+  padding:20px; color:var(--cream); font-family:'Jost',sans-serif;
+  font-size:14px; line-height:1.7; resize:none; height:160px;
+  transition:border-color .3s,background .3s,box-shadow .3s; outline:none;
+}
+textarea::placeholder { color:rgba(255,255,255,0.2); }
+textarea:focus { border-color:rgba(192,122,174,0.5); background:rgba(255,255,255,0.08); box-shadow:0 0 0 3px rgba(192,122,174,0.1); }
+.char-count { position:absolute; bottom:12px; right:16px; font-size:10px; color:rgba(255,255,255,0.2); }
+
+.examples-row { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:24px; }
+.ex-pill {
+  background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);
+  border-radius:20px; padding:6px 14px; font-size:11px; color:rgba(255,255,255,0.5);
+  cursor:pointer; transition:all .2s; white-space:nowrap;
+}
+.ex-pill:hover { background:rgba(192,122,174,0.15); border-color:rgba(192,122,174,0.4); color:var(--lavender); }
+
+.predict-btn {
+  width:100%; padding:18px;
+  background:linear-gradient(135deg,var(--rose),var(--mauve));
+  border:none; border-radius:18px; color:white;
+  font-family:'Jost',sans-serif; font-size:15px; font-weight:600; letter-spacing:1px;
+  cursor:pointer; transition:all .3s; box-shadow:0 8px 24px rgba(232,132,154,0.35);
+  position:relative; overflow:hidden;
+}
+.predict-btn::before {
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,0.15),transparent);
+  opacity:0; transition:opacity .3s;
+}
+.predict-btn:hover::before { opacity:1; }
+.predict-btn:hover { transform:translateY(-2px); box-shadow:0 12px 32px rgba(232,132,154,0.45); }
+.predict-btn:active { transform:translateY(0); }
+.predict-btn:disabled { opacity:.6; cursor:not-allowed; transform:none; }
+
+/* ── LOADING OVERLAY ── */
+.loading-overlay {
+  display:none; position:fixed; inset:0; z-index:99;
+  background:rgba(19,12,16,0.88); backdrop-filter:blur(14px);
+  flex-direction:column; align-items:center; justify-content:center; gap:22px;
+}
+.loading-overlay.show { display:flex; }
+
+.bloom-loader { position:relative; width:90px; height:90px; }
+.petal {
+  position:absolute; width:16px; height:32px; border-radius:50%;
+  top:50%; left:50%; transform-origin:50% 100%;
+  animation:petalPulse 1.6s ease-in-out infinite;
+}
+.petal:nth-child(1){background:var(--rose);   margin:-32px 0 0 -8px; animation-delay:0s;}
+.petal:nth-child(2){background:var(--mauve);  transform:rotate(45deg)  translateY(-32px) rotate(-45deg); margin:-32px 0 0 -8px; animation-delay:.2s;}
+.petal:nth-child(3){background:var(--lavender);transform:rotate(90deg)  translateY(-32px) rotate(-90deg); margin:-32px 0 0 -8px; animation-delay:.4s;}
+.petal:nth-child(4){background:var(--blush);  transform:rotate(135deg) translateY(-32px) rotate(-135deg); margin:-32px 0 0 -8px; animation-delay:.6s;}
+.petal:nth-child(5){background:var(--peach);  transform:rotate(180deg) translateY(-32px) rotate(-180deg); margin:-32px 0 0 -8px; animation-delay:.8s;}
+.petal:nth-child(6){background:var(--sage);   transform:rotate(225deg) translateY(-32px) rotate(-225deg); margin:-32px 0 0 -8px; animation-delay:1s;}
+.petal:nth-child(7){background:var(--gold);   transform:rotate(270deg) translateY(-32px) rotate(-270deg); margin:-32px 0 0 -8px; animation-delay:1.2s;}
+.petal:nth-child(8){background:var(--rose);   transform:rotate(315deg) translateY(-32px) rotate(-315deg); margin:-32px 0 0 -8px; animation-delay:1.4s;}
+
+/* simpler petal approach */
+.bloom-loader { animation: loaderSpin 8s linear infinite; }
+.petal { position:absolute; width:14px; height:28px; border-radius:50% 50% 50% 50%; top:0; left:50%; margin-left:-7px; transform-origin:7px 45px; opacity:.3; animation:petalPulse 1.6s ease-in-out infinite; }
+.petal:nth-child(1){transform:rotate(0deg);   animation-delay:0s;}
+.petal:nth-child(2){transform:rotate(45deg);  animation-delay:.2s;}
+.petal:nth-child(3){transform:rotate(90deg);  animation-delay:.4s;}
+.petal:nth-child(4){transform:rotate(135deg); animation-delay:.6s;}
+.petal:nth-child(5){transform:rotate(180deg); animation-delay:.8s;}
+.petal:nth-child(6){transform:rotate(225deg); animation-delay:1s;}
+.petal:nth-child(7){transform:rotate(270deg); animation-delay:1.2s;}
+.petal:nth-child(8){transform:rotate(315deg); animation-delay:1.4s;}
+@keyframes petalPulse { 0%,100%{opacity:.2;transform:rotate(var(--r)) scaleY(.7)} 50%{opacity:1;transform:rotate(var(--r)) scaleY(1)} }
+
+.loading-phrase { font-family:'Cormorant Garamond',serif; font-style:italic; font-size:24px; color:var(--blush); }
+.loading-sub    { font-size:11px; color:var(--muted); letter-spacing:3px; text-transform:uppercase; }
+
+/* ── PAGE 2 ── */
+#page2 { padding-top:0; justify-content:flex-start; }
+
+.topbar {
+  position:sticky; top:0; z-index:10; width:100%; max-width:700px;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:20px 0 16px;
+  background:linear-gradient(180deg,#130C10 65%,transparent);
+}
+.back-btn {
+  display:flex; align-items:center; gap:8px;
+  background:var(--glass2); border:1px solid rgba(255,255,255,0.12);
+  border-radius:14px; padding:9px 18px;
+  font-size:12px; color:var(--muted); cursor:pointer;
+  transition:all .2s; backdrop-filter:blur(8px); letter-spacing:.5px;
+}
+.back-btn:hover { color:var(--cream); background:rgba(255,255,255,0.12); }
+.topbar-logo {
+  font-family:'Cormorant Garamond',serif; font-size:22px; font-style:italic; font-weight:300; letter-spacing:3px;
+  background:linear-gradient(135deg,#F2C4CE,#C07AAE);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+}
+
+.mood-banner {
+  width:100%; max-width:700px; border-radius:28px;
+  padding:48px 36px 36px; text-align:center; margin-bottom:18px;
+  position:relative; overflow:hidden;
+  background:var(--glass2); border:1px solid rgba(255,255,255,0.1);
+  box-shadow:0 20px 60px rgba(0,0,0,0.35);
+}
+.banner-glow {
+  position:absolute; inset:0; border-radius:28px; opacity:.18;
+  background:var(--banner-grad,linear-gradient(135deg,#E8849A,#C07AAE));
+}
+.mood-emoji-big {
+  font-size:82px; display:block; margin-bottom:16px;
+  position:relative; z-index:1;
+  animation:popIn .6s cubic-bezier(.175,.885,.32,1.275) both;
+}
+@keyframes popIn { from{transform:scale(0) rotate(-20deg);opacity:0} to{transform:scale(1) rotate(0);opacity:1} }
+.mood-label {
+  font-family:'Cormorant Garamond',serif; font-size:50px; font-weight:600; letter-spacing:2px;
+  line-height:1; margin-bottom:18px; position:relative; z-index:1;
+}
+.conf-wrap { max-width:230px; margin:0 auto; position:relative; z-index:1; }
+.conf-header { display:flex; justify-content:space-between; margin-bottom:7px; }
+.conf-title { font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); }
+.conf-num   { font-size:10px; color:var(--muted); }
+.conf-track { height:5px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden; }
+.conf-fill  { height:100%; border-radius:3px; animation:barFill .9s .35s ease both; transform-origin:left; }
+@keyframes barFill { from{transform:scaleX(0)} to{transform:scaleX(1)} }
+
+.rsect {
+  width:100%; max-width:700px;
+  background:var(--glass); border:1px solid rgba(255,255,255,0.08);
+  border-radius:24px; padding:28px; margin-bottom:16px;
+}
+.rsect-eye {
+  font-size:9px; letter-spacing:4px; text-transform:uppercase;
+  margin-bottom:16px; display:flex; align-items:center; gap:8px;
+}
+.rsect-eye::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,currentColor,transparent); opacity:.22; }
+
+.insight-text {
+  font-family:'Cormorant Garamond',serif;
+  font-size:19px; font-style:italic; line-height:1.78;
+  color:rgba(253,246,240,.92);
+}
+
+.tags-row { display:flex; flex-wrap:wrap; gap:8px; }
+.tag { padding:7px 15px; border-radius:20px; font-size:12px; font-weight:500; border:1px solid; }
+
+.suggestion-item {
+  display:flex; align-items:flex-start; gap:16px;
+  padding:16px 0; border-bottom:1px solid rgba(255,255,255,0.06);
+}
+.suggestion-item:last-child { border-bottom:none; padding-bottom:0; }
+.sug-icon {
+  width:44px; height:44px; border-radius:14px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:20px; background:rgba(255,255,255,0.07); margin-top:2px;
+}
+.sug-title { font-size:14px; font-weight:600; color:var(--cream); margin-bottom:5px; }
+.sug-text  { font-size:13px; color:rgba(253,246,240,.65); line-height:1.72; }
+
+.action-cat { margin-bottom:22px; }
+.action-cat:last-child { margin-bottom:0; }
+.action-cat-label {
+  font-size:10px; letter-spacing:2px; text-transform:uppercase; font-weight:600;
+  margin-bottom:12px; display:flex; align-items:center; gap:7px;
+}
+.cat-dot { width:7px; height:7px; border-radius:50%; }
+.action-steps { display:flex; flex-direction:column; gap:10px; }
+.action-step {
+  display:flex; align-items:flex-start; gap:14px;
+  background:rgba(255,255,255,0.04); border-radius:14px;
+  padding:14px 16px; border:1px solid rgba(255,255,255,0.06);
+  transition:background .2s;
+}
+.action-step:hover { background:rgba(255,255,255,0.07); }
+.step-num {
+  width:26px; height:26px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:700; margin-top:2px;
+}
+.step-title { font-size:13px; font-weight:600; color:var(--cream); margin-bottom:3px; }
+.step-desc  { font-size:12px; color:var(--muted); line-height:1.55; }
+
+.affirmation-card {
+  width:100%; max-width:700px; border-radius:24px;
+  padding:36px 28px; text-align:center; margin-bottom:16px;
+  background:linear-gradient(135deg,rgba(192,122,174,.15),rgba(232,132,154,.1));
+  border:1px solid rgba(192,122,174,.28); position:relative; overflow:hidden;
+}
+.affirmation-card::before {
+  content:'✦'; position:absolute; font-size:110px;
+  color:rgba(255,255,255,.025); top:-20px; left:8px; pointer-events:none;
+}
+.aff-eye { font-size:9px; letter-spacing:4px; text-transform:uppercase; color:var(--mauve); margin-bottom:14px; }
+.aff-text { font-family:'Cormorant Garamond',serif; font-size:26px; font-style:italic; line-height:1.55; color:var(--cream); }
+.aff-sub  { font-size:12px; color:var(--muted); margin-top:12px; }
+
+.try-again {
+  width:100%; max-width:700px; margin-bottom:40px;
+  padding:16px; background:transparent;
+  border:1px solid rgba(255,255,255,0.12); border-radius:16px;
+  color:var(--muted); font-family:'Jost',sans-serif; font-size:13px;
+  cursor:pointer; transition:all .2s; letter-spacing:.5px;
+}
+.try-again:hover { border-color:rgba(255,255,255,.25); color:var(--cream); background:rgba(255,255,255,.04); }
+
+/* mood themes */
+.t-happy    { --banner-grad:linear-gradient(135deg,#F5C878,#E8A840); }
+.t-sad      { --banner-grad:linear-gradient(135deg,#A8C0E8,#7090C8); }
+.t-anxious  { --banner-grad:linear-gradient(135deg,#E8C4A0,#D89A70); }
+.t-angry    { --banner-grad:linear-gradient(135deg,#E87878,#C84848); }
+.t-excited  { --banner-grad:linear-gradient(135deg,#E8849A,#C07AAE); }
+.t-calm     { --banner-grad:linear-gradient(135deg,#A8C8A0,#78A870); }
+.t-loved    { --banner-grad:linear-gradient(135deg,#F2C4CE,#E8849A); }
+.t-confused { --banner-grad:linear-gradient(135deg,#D4B8E8,#A888C8); }
+.t-tired    { --banner-grad:linear-gradient(135deg,#9A8A94,#6A5A64); }
+.t-hopeful  { --banner-grad:linear-gradient(135deg,#A8D8C8,#68B898); }
+
+@keyframes fadeUp { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:rgba(192,122,174,.3); border-radius:2px; }
+</style>
+</head>
+<body>
+
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+<div class="orb orb3"></div>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="bloom-loader">
+    <div class="petal" style="background:var(--rose)"></div>
+    <div class="petal" style="background:var(--mauve)"></div>
+    <div class="petal" style="background:var(--lavender)"></div>
+    <div class="petal" style="background:var(--blush)"></div>
+    <div class="petal" style="background:var(--peach)"></div>
+    <div class="petal" style="background:var(--sage)"></div>
+    <div class="petal" style="background:var(--gold)"></div>
+    <div class="petal" style="background:var(--rose)"></div>
+  </div>
+  <div class="loading-phrase" id="loadingPhrase">Reading her energy...</div>
+  <div class="loading-sub">bloom ai is tuning in</div>
+</div>
+
+<!-- ═══ PAGE 1: INPUT ═══ -->
+<div class="page" id="page1">
+
+  <div class="logo-wrap">
+    <div class="logo">bloom.</div>
+    <div class="logo-sub">AI Mood Predictor for Her</div>
+  </div>
+
+  <div class="input-card">
+    <div class="card-eyebrow">✦ Describe Her</div>
+    <div class="card-title">What's her story right now?</div>
+    <div class="card-desc">Tell me about her situation, what happened today, how she's been acting, or what's on her mind — and I'll read between the lines to reveal her true mood.</div>
+
+    <div class="input-wrap">
+      <textarea id="description" placeholder="e.g. She's been really quiet today, didn't touch her breakfast, and keeps staring out the window. She had a big argument with her best friend yesterday and hasn't responded to any texts since…" oninput="updateChar()"></textarea>
+      <div class="char-count"><span id="charCount">0</span>/600</div>
+    </div>
+
+    <div class="examples-row">
+      <div class="ex-pill" onclick="fillExample(0)">🥺 Heartbreak</div>
+      <div class="ex-pill" onclick="fillExample(1)">🎉 Big news</div>
+      <div class="ex-pill" onclick="fillExample(2)">😤 Friend fight</div>
+      <div class="ex-pill" onclick="fillExample(3)">😴 Burnout</div>
+      <div class="ex-pill" onclick="fillExample(4)">🌸 Date nerves</div>
+      <div class="ex-pill" onclick="fillExample(5)">😰 Exam stress</div>
+    </div>
+
+    <button class="predict-btn" id="predictBtn" onclick="predictMood()">
+      ✦ Predict Her Mood
+    </button>
+  </div>
+
+</div>
+
+<!-- ═══ PAGE 2: RESULTS ═══ -->
+<div class="page hidden" id="page2">
+
+  <div class="topbar">
+    <div class="back-btn" onclick="goBack()">← Back</div>
+    <div class="topbar-logo">bloom.</div>
+    <div style="width:88px"></div>
+  </div>
+
+  <!-- Mood Banner -->
+  <div class="mood-banner" id="moodBanner">
+    <div class="banner-glow" id="bannerGlow"></div>
+    <span class="mood-emoji-big" id="moodEmoji">✨</span>
+    <div class="mood-label" id="moodLabel">—</div>
+    <div class="conf-wrap">
+      <div class="conf-header">
+        <div class="conf-title">Confidence</div>
+        <div class="conf-num" id="confNum">—</div>
+      </div>
+      <div class="conf-track">
+        <div class="conf-fill" id="confFill" style="width:0%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Deep Reading -->
+  <div class="rsect" style="animation:fadeUp .45s .0s ease both">
+    <div class="rsect-eye" style="color:var(--mauve)">✦ Deep Reading</div>
+    <div class="insight-text" id="insightText"></div>
+  </div>
+
+  <!-- Emotional signals -->
+  <div class="rsect" style="animation:fadeUp .45s .07s ease both">
+    <div class="rsect-eye" style="color:var(--lavender)">◈ Emotional Signals</div>
+    <div class="tags-row" id="tagsRow"></div>
+  </div>
+
+  <!-- What She Needs -->
+  <div class="rsect" style="animation:fadeUp .45s .14s ease both">
+    <div class="rsect-eye" style="color:var(--rose)">💌 What She Needs Right Now</div>
+    <div id="suggestionsWrap"></div>
+  </div>
+
+  <!-- Action Plan -->
+  <div class="rsect" style="animation:fadeUp .45s .21s ease both">
+    <div class="rsect-eye" style="color:var(--gold)">✦ Your Action Plan</div>
+    <div id="immediateActions"></div>
+    <div id="shortTermActions"></div>
+    <div id="selfCareActions"></div>
+  </div>
+
+  <!-- Affirmation -->
+  <div class="affirmation-card" style="animation:fadeUp .45s .28s ease both">
+    <div class="aff-eye">✦ Affirmation for Her</div>
+    <div class="aff-text" id="affirmationText"></div>
+    <div class="aff-sub"  id="affirmationSub"></div>
+  </div>
+
+  <button class="try-again" style="animation:fadeUp .45s .34s ease both" onclick="goBack()">
+    ← Try Another Description
+  </button>
+
+</div>
+
+<script>
+const examples = [
+  "She's been crying on and off all day, keeps looking at old photos on her phone, and barely said two words at dinner. She just went through a breakup after a 2-year relationship and she and her ex had everything planned out together.",
+  "She literally cannot stop smiling and keeps squealing when she checks her phone. She just got accepted into her dream university and has been calling everyone she knows to share the news. She's dancing around the kitchen.",
+  "She came home, slammed her bedroom door, and hasn't come out. She barely ate and is giving one-word answers. She had a huge fight with her best friend of 5 years over something that was said behind her back.",
+  "She's been sleeping 10 hours but still wakes up exhausted. She's been skipping workouts she used to love, missing deadlines, and staring at her to-do list without doing anything. She says she feels numb and empty.",
+  "She spent 3 hours getting ready and keeps asking everyone if she looks okay. She's been laughing nervously at everything and can't sit still. It's her first date with someone she's had a crush on for months.",
+  "She's been at her desk for 12 hours straight and keeps saying she's going to fail. Her hands are shaking while she types and she looks like she might cry. Finals are tomorrow and she feels completely unprepared."
+];
+
+const phrases = [
+  "Reading her energy...",
+  "Feeling her emotions...",
+  "Looking between the lines...",
+  "Sensing her heart...",
+  "Decoding her story..."
+];
+
+const moodMap = {
+  happy:       { emoji:'😊', theme:'t-happy',    color:'#F5C878' },
+  sad:         { emoji:'😢', theme:'t-sad',       color:'#A8C0E8' },
+  anxious:     { emoji:'😰', theme:'t-anxious',   color:'#E8C4A0' },
+  angry:       { emoji:'😤', theme:'t-angry',     color:'#E87878' },
+  excited:     { emoji:'🎉', theme:'t-excited',   color:'#E8849A' },
+  calm:        { emoji:'😌', theme:'t-calm',      color:'#A8C8A0' },
+  loved:       { emoji:'🥰', theme:'t-loved',     color:'#F2C4CE' },
+  confused:    { emoji:'😕', theme:'t-confused',  color:'#D4B8E8' },
+  tired:       { emoji:'😴', theme:'t-tired',     color:'#9A8A94' },
+  hopeful:     { emoji:'🌟', theme:'t-hopeful',   color:'#A8D8C8' },
+  heartbroken: { emoji:'💔', theme:'t-sad',       color:'#A8C0E8' },
+  overwhelmed: { emoji:'😵', theme:'t-anxious',   color:'#E8C4A0' },
+  joyful:      { emoji:'✨', theme:'t-excited',   color:'#E8849A' },
+  grateful:    { emoji:'🙏', theme:'t-hopeful',   color:'#A8D8C8' },
+  lonely:      { emoji:'🌧️',theme:'t-sad',       color:'#A8C0E8' },
+  nervous:     { emoji:'🦋', theme:'t-anxious',   color:'#E8C4A0' },
+};
+
+let phraseInterval;
+
+function updateChar() {
+  const ta = document.getElementById('description');
+  if (ta.value.length > 600) ta.value = ta.value.slice(0,600);
+  document.getElementById('charCount').textContent = ta.value.length;
+}
+
+function fillExample(i) {
+  const ta = document.getElementById('description');
+  ta.value = examples[i];
+  updateChar(); ta.focus();
+}
+
+function goBack() {
+  const p2 = document.getElementById('page2');
+  const p1 = document.getElementById('page1');
+  p2.classList.add('hidden');
+  setTimeout(() => {
+    p1.classList.remove('hidden','exit');
+    p1.scrollTop = 0;
+  }, 50);
+  document.getElementById('predictBtn').disabled = false;
+  document.getElementById('predictBtn').textContent = '✦ Predict Her Mood';
+}
+
+function showResults() {
+  const p1 = document.getElementById('page1');
+  const p2 = document.getElementById('page2');
+  p1.classList.add('exit');
+  setTimeout(() => {
+    p1.classList.add('hidden');
+    p2.classList.remove('hidden');
+    p2.scrollTop = 0;
+    // trigger re-animation
+    p2.querySelectorAll('[style*="animation"]').forEach(el => {
+      const anim = el.style.animation;
+      el.style.animation = 'none';
+      el.offsetHeight; // reflow
+      el.style.animation = anim;
+    });
+  }, 500);
+}
+
+function startLoader() {
+  let i = 0;
+  document.getElementById('loadingPhrase').textContent = phrases[0];
+  phraseInterval = setInterval(() => {
+    i = (i+1) % phrases.length;
+    document.getElementById('loadingPhrase').textContent = phrases[i];
+  }, 1800);
+  document.getElementById('loadingOverlay').classList.add('show');
+}
+function stopLoader() {
+  clearInterval(phraseInterval);
+  document.getElementById('loadingOverlay').classList.remove('show');
+}
+
+async function predictMood() {
+  const desc = document.getElementById('description').value.trim();
+  if (!desc) {
+    const ta = document.getElementById('description');
+    ta.style.borderColor = 'rgba(232,132,154,0.7)';
+    ta.focus();
+    setTimeout(() => ta.style.borderColor = '', 1500);
+    return;
+  }
+
+  document.getElementById('predictBtn').disabled = true;
+  document.getElementById('predictBtn').textContent = '✦ Analyzing...';
+  startLoader();
+
+  const prompt = `You are an empathetic mood analyst who specializes in understanding female emotional states from behavioral descriptions.
+
+Given this description of a girl's situation and behavior:
+"${desc}"
+
+Respond ONLY with a valid JSON object — no markdown, no backticks, no explanation. Use exactly this structure:
+
+{
+  "mood": "one word mood (e.g. heartbroken, anxious, excited, sad, hopeful, angry, tired, lonely, nervous, calm, joyful, confused, loved, overwhelmed, grateful)",
+  "confidence": 87,
+  "moodColor": "soft feminine hex color matching the mood",
+  "insight": "2-3 sentences in third person ('She feels...') — poetic, empathetic, going beyond surface level",
+  "emotionalTags": ["tag1","tag2","tag3","tag4"],
+  "suggestions": [
+    { "icon": "emoji", "title": "3-4 word title", "text": "2-3 detailed, specific, compassionate sentences: what to do, why it helps emotionally, and how to approach it with care" },
+    { "icon": "emoji", "title": "3-4 word title", "text": "2-3 detailed sentences" },
+    { "icon": "emoji", "title": "3-4 word title", "text": "2-3 detailed sentences" },
+    { "icon": "emoji", "title": "3-4 word title", "text": "2-3 detailed sentences" }
+  ],
+  "actionPlan": {
+    "immediate": {
+      "label": "Right Now — Next 30 Mins",
+      "color": "#E8849A",
+      "steps": [
+        { "title": "action title", "desc": "what to do and exactly why it helps right now" },
+        { "title": "action title", "desc": "explanation" },
+        { "title": "action title", "desc": "explanation" }
+      ]
+    },
+    "shortTerm": {
+      "label": "Today & Tomorrow",
+      "color": "#C07AAE",
+      "steps": [
+        { "title": "action title", "desc": "explanation" },
+        { "title": "action title", "desc": "explanation" },
+        { "title": "action title", "desc": "explanation" }
+      ]
+    },
+    "selfCare": {
+      "label": "Ongoing Self-Care",
+      "color": "#A8C8A0",
+      "steps": [
+        { "title": "action title", "desc": "explanation" },
+        { "title": "action title", "desc": "explanation" }
+      ]
+    }
+  },
+  "affirmation": "A warm empowering affirmation (10-15 words, present tense, uplifting)",
+  "affirmationSub": "A gentle closing note (1 short sentence)"
+}`;
+
+  try {
+    const resp = await fetch('/api/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1800,
+        messages: [{ role:'user', content: prompt }]
+      })
+    });
+
+    const data = await resp.json();
+    const raw   = data.content.map(b => b.text||'').join('');
+    const clean = raw.replace(/```json|```/g,'').trim();
+    const result = JSON.parse(clean);
+
+    renderResult(result);
+    stopLoader();
+    showResults();
+
+  } catch(err) {
+    stopLoader();
+    document.getElementById('predictBtn').disabled = false;
+    document.getElementById('predictBtn').textContent = '✦ Predict Her Mood';
+    alert('Something went wrong — please try again.');
+    console.error(err);
+  }
+}
+
+function renderResult(r) {
+  const key   = (r.mood||'calm').toLowerCase();
+  const cfg   = moodMap[key] || moodMap['calm'];
+  const color = r.moodColor || cfg.color;
+
+  // Banner
+  const banner = document.getElementById('moodBanner');
+  banner.className = 'mood-banner ' + cfg.theme;
+  document.getElementById('moodEmoji').textContent = cfg.emoji;
+  document.getElementById('moodLabel').textContent = cap(r.mood);
+  document.getElementById('moodLabel').style.color = color;
+
+  // Confidence
+  const conf = Math.min(Math.max(r.confidence||80,10),100);
+  const fill  = document.getElementById('confFill');
+  fill.style.background = color;
+  fill.style.width = conf + '%';
+  document.getElementById('confNum').textContent = conf + '%';
+
+  // Insight
+  document.getElementById('insightText').textContent = r.insight||'';
+
+  // Tags
+  const tr = document.getElementById('tagsRow');
+  tr.innerHTML = '';
+  const tc = [color,'#D4B8E8','#F2C4CE','#A8D8C8','#A8C0E8'];
+  (r.emotionalTags||[]).forEach((tag,i) => {
+    const c = tc[i%tc.length];
+    const el = document.createElement('div');
+    el.className = 'tag';
+    el.style.cssText = `color:${c};border-color:${c}44;background:${c}15`;
+    el.textContent = tag;
+    tr.appendChild(el);
+  });
+
+  // Suggestions
+  const sw = document.getElementById('suggestionsWrap');
+  sw.innerHTML = '';
+  (r.suggestions||[]).forEach(s => {
+    const el = document.createElement('div');
+    el.className = 'suggestion-item';
+    el.innerHTML = `
+      <div class="sug-icon">${s.icon}</div>
+      <div>
+        <div class="sug-title">${s.title||''}</div>
+        <div class="sug-text">${s.text||''}</div>
+      </div>`;
+    sw.appendChild(el);
+  });
+
+  // Action plan
+  const ap = r.actionPlan||{};
+  [
+    { id:'immediateActions', d: ap.immediate },
+    { id:'shortTermActions', d: ap.shortTerm },
+    { id:'selfCareActions',  d: ap.selfCare  },
+  ].forEach(({id,d}) => {
+    const wrap = document.getElementById(id);
+    wrap.innerHTML = '';
+    if (!d) return;
+    const cat = document.createElement('div');
+    cat.className = 'action-cat';
+    const stepsId = id+'-s';
+    cat.innerHTML = `
+      <div class="action-cat-label">
+        <span class="cat-dot" style="background:${d.color}"></span>
+        <span style="color:${d.color}">${d.label}</span>
+      </div>
+      <div class="action-steps" id="${stepsId}"></div>`;
+    wrap.appendChild(cat);
+    const sw2 = document.getElementById(stepsId);
+    (d.steps||[]).forEach((step,i) => {
+      const el = document.createElement('div');
+      el.className = 'action-step';
+      el.innerHTML = `
+        <div class="step-num" style="background:${d.color}22;color:${d.color}">${i+1}</div>
+        <div>
+          <div class="step-title">${step.title}</div>
+          <div class="step-desc">${step.desc}</div>
+        </div>`;
+      sw2.appendChild(el);
+    });
+  });
+
+  // Affirmation
+  document.getElementById('affirmationText').textContent = r.affirmation||'';
+  document.getElementById('affirmationSub').textContent  = r.affirmationSub||'';
+}
+
+function cap(s){ return s ? s[0].toUpperCase()+s.slice(1) : ''; }
+</script>
+</body>
+</html>
